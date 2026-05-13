@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Briefing — livia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* =====================================================
+     DESIGN TOKENS — 8pt grid
+     Base unit: 8px
+     Scale: 4 8 12 16 24 32 40 48 56 64
+  ===================================================== */
+  :root{
+    --primary:#2a2a2a; --neutral-200:#e7e7e7; --neutral-900:#2a2a2a;
+    --paper:#f8fbfa; --white:#ffffff;
+    --ease-out:cubic-bezier(.22,.9,.32,1); --ease-spring:cubic-bezier(.34,1.4,.64,1);
+    --sidebar-w:min(300px, 88vw); /* BUG FIX: never wider than viewport on small screens */
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; font-family:'Inter',system-ui,sans-serif; background:var(--paper); color:var(--neutral-900); -webkit-font-smoothing:antialiased; }
+  button{ font-family:inherit; cursor:pointer; }
+
+  /* ====== ROOT LAYOUT ====== */
+  .shell{ display:flex; height:100vh; overflow:hidden; }
+
+  /* ── Sidebar: overlay on mobile, push on desktop ── */
+  .sidebar{
+    /* Mobile-first: always overlay */
+    position:fixed; top:0; right:0; z-index:50;
+    width:var(--sidebar-w); height:100vh;
+    background:var(--white);
+    border-left:1px solid var(--neutral-200);
+    display:flex; flex-direction:column; overflow:hidden;
+    transform:translateX(100%);
+    transition:transform .35s var(--ease-out);
+    box-shadow:-16px 0 40px rgba(0,0,0,.18);
+  }
+  .sidebar.open{ transform:translateX(0); }
+
+  /* Desktop (≥641px): push layout instead of overlay */
+  @media(min-width:641px){
+    .sidebar{
+      position:relative; top:auto; right:auto; z-index:auto;
+      flex-shrink:0; height:100vh;
+      transform:none;
+      margin-right:calc(-1 * var(--sidebar-w));
+      transition:margin-right .35s var(--ease-out);
+      box-shadow:none;
+    }
+    .sidebar.open{ transform:none; margin-right:0; }
+  }
+
+  /* Backdrop — visible on mobile only */
+  .mob-backdrop{
+    display:none; position:fixed; inset:0;
+    background:rgba(0,0,0,.3); z-index:45;
+    opacity:0; pointer-events:none; transition:opacity .25s;
+  }
+  @media(max-width:640px){
+    .mob-backdrop{ display:block; }
+  }
+  .mob-backdrop.show{ opacity:1; pointer-events:auto; }
+
+  .main{ flex:1; display:flex; flex-direction:column; height:100vh; overflow:hidden; min-width:0; }
+
+  /* ====== TABS — height snapped to 48px (6×8) ====== */
+  .tabs{ display:flex; align-items:center; background:var(--white); border-bottom:1px solid var(--neutral-200); padding:0 16px; height:48px; flex-shrink:0; gap:4px; }
+  .tab{ padding:0 4px; height:100%; margin-right:16px; font-size:13px; font-weight:500; color:#999; background:none; border:none; position:relative; transition:color .2s; white-space:nowrap; min-height:44px; /* touch target */ }
+  .tab:hover{ color:var(--neutral-900); }
+  .tab.active{ color:var(--primary); }
+  .tab.active::after{ content:''; position:absolute; bottom:-1px; left:0; right:0; height:2px; background:var(--primary); border-radius:2px 2px 0 0; }
+  .badge{ background:rgba(42,42,42,.1); color:var(--primary); font-size:10px; font-weight:600; padding:2px 6px; border-radius:999px; margin-left:4px; }
+  .tabs-spacer{ flex:1; }
+  .tabs-meta{ font-size:11px; color:#aaa; text-transform:uppercase; letter-spacing:.1em; display:flex; align-items:center; gap:8px; }
+  @media(max-width:480px){ .tabs-meta span:last-child{ display:none; } }
+  .live-dot-green{ width:6px; height:6px; border-radius:50%; background:#4caf50; box-shadow:0 0 0 3px rgba(76,175,80,.15); animation:pulse 2s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1} 50%{opacity:.5} }
+  .main-content{ flex:1; overflow:hidden; position:relative; }
+
+  /* ====== INTRO ====== */
+  .intro{ background:radial-gradient(ellipse at 30% 0%,#3a3a3a 0%,#2a2a2a 55%,#1f1f1f 100%); color:var(--paper); height:100%; display:flex; flex-direction:column; overflow-y:auto; position:relative; }
+  .intro::before{ content:''; position:absolute; inset:0; background:linear-gradient(180deg,rgba(42,42,42,.55) 0%,rgba(42,42,42,.35) 35%,rgba(20,20,20,.78) 100%); pointer-events:none; }
+  .intro>*{ position:relative; z-index:1; }
+
+  /* 8pt: padding 16px vertical, clamp horizontal 16→56 */
+  .home-nav{ display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; padding:16px clamp(16px,4vw,56px); border-bottom:1px solid rgba(248,251,250,.12); flex-shrink:0; }
+  .home-nav-links{ display:flex; align-items:center; gap:clamp(16px,3vw,32px); }
+  .home-nav-link{ background:none; border:none; font-size:13px; font-weight:500; color:rgba(248,251,250,.75); transition:color .2s; padding:8px 0; /* 8pt touch area */ }
+  .home-nav-link:hover{ color:var(--paper); }
+  @media(max-width:480px){ .home-nav-links{ display:none; } }
+
+  .home-nav-right{ display:inline-flex; align-items:center; gap:8px; }
+  /* BUG FIX: min touch target 44px */
+  .eye-btn-dark{ width:40px; height:40px; border-radius:50%; border:1px solid rgba(248,251,250,.22); background:rgba(255,255,255,.08); color:var(--paper); display:inline-flex; align-items:center; justify-content:center; transition:transform .2s,background .2s; flex-shrink:0; }
+  .eye-btn-dark:hover{ background:rgba(255,255,255,.16); transform:translateY(-1px); }
+  .eye-btn-dark.active{ background:rgba(255,255,255,.2); border-color:rgba(248,251,250,.5); }
+  .home-nav-cta{ background:var(--paper); color:var(--primary); border:none; padding:8px 16px; border-radius:999px; font-size:13px; font-weight:600; display:inline-flex; align-items:center; gap:8px; transition:all .2s; white-space:nowrap; min-height:40px; }
+  .home-nav-cta:hover{ transform:translateY(-1px); box-shadow:0 8px 20px rgba(0,0,0,.22); }
+
+  /* hero padding: 24px → 56px horizontal, 24px → 56px vertical — all 8pt multiples */
+  .home-hero{ flex:1; display:flex; align-items:center; justify-content:flex-start; padding:clamp(24px,4vw,56px) clamp(16px,4vw,64px); }
+  .hero-card{ background:rgba(255,255,255,.07); border:1px solid rgba(248,251,250,.16); border-radius:16px; padding:clamp(24px,4vw,48px); max-width:520px; width:100%; backdrop-filter:blur(18px); box-shadow:0 24px 56px rgba(0,0,0,.28); animation:introIn .9s var(--ease-out); }
+  @keyframes introIn{ from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+
+  .eyebrow{ font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.22em; color:#7080b0; margin-bottom:24px; display:inline-flex; align-items:center; gap:8px; }
+  .eyebrow::before{ content:''; width:24px; height:1px; background:#7080b0; }
+  .eyebrow::before{ content:''; width:24px; height:1px; background:rgba(248,251,250,.55); }
+  .live-dot-warm{ width:6px; height:6px; border-radius:50%; background:#7080b0; box-shadow:0 0 0 4px rgba(112,128,176,.22); }
+  .headline-block{ display:inline-block; width:100%; }
+  .headline{ font-size:clamp(32px,5.2vw,64px); font-weight:600; letter-spacing:-.035em; line-height:.98; color:var(--paper); margin-bottom:24px; text-shadow:0 4px 24px rgba(0,0,0,.18); }
+  .headline em{ font-style:normal; background:linear-gradient(transparent 62%,rgba(248,251,250,.22) 62%); padding:0 4px; }
+  /* 8pt: 36→32 */
+  .sub{ font-size:clamp(15px,1.4vw,17px); color:rgba(248,251,250,.78); line-height:1.65; margin-bottom:32px; }
+  .br-desk{ display:none; }
+  @media(min-width:641px){ .br-desk{ display:block; } }
+  .sub-strong{ font-weight:700; color:var(--paper); }
+  .home-nav-logo{ display:flex; align-items:center; }
+  .cta-row{ display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  .cta-meta{ font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.22em; color:#7080b0; display:inline-flex; align-items:center; gap:8px; }
+  /* 8pt: padding 16px 24px */
+  .intro-cta{ background:var(--paper); color:var(--primary); border:none; padding:16px 28px; border-radius:999px; font-size:15px; font-weight:600; display:inline-flex; align-items:center; gap:12px; transition:all .25s var(--ease-spring); box-shadow:0 12px 32px rgba(0,0,0,.25); min-height:48px; }
+  .intro-cta:hover{ background:#7080b0; color:var(--paper); transform:translateY(-2px) scale(1.02); box-shadow:0 8px 16px rgba(112,128,176,.2); }
+  .arr{ background:var(--neutral-200); color:var(--primary); padding:4px 8px; border-radius:4px; font-size:12px; }
+
+  /* 8pt: padding 16px */
+  .home-foot{ padding:16px clamp(16px,4vw,56px); border-top:1px solid rgba(248,251,250,.1); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; font-size:11px; color:rgba(248,251,250,.5); }
+  .home-foot a{ color:rgba(248,251,250,.65); text-decoration:none; }
+  .foot-msg-btn{ font-size:11px; font-weight:500; color:rgba(248,251,250,.55); background:none; border:none; border-bottom:1px solid rgba(248,251,250,.3); padding-bottom:1px; cursor:pointer; transition:color .2s,border-color .2s; letter-spacing:.02em; text-decoration:none; }
+  .foot-msg-btn:hover{ color:rgba(248,251,250,.85); border-bottom-color:rgba(248,251,250,.6); }
+  .home-foot .dot{ width:3px; height:3px; border-radius:50%; background:rgba(248,251,250,.3); display:inline-block; }
+  @media(max-width:480px){ .foot-right{ display:none; } }
+
+  /* ====== FORM ====== */
+  .form-stage{ display:flex; flex-direction:column; height:100%; background:linear-gradient(135deg,#2a2a2a 0%,#1f1f1f 100%); overflow:hidden; }
+  .progress-bar{ height:3px; background:rgba(0,0,0,.2); flex-shrink:0; }
+  .progress-fill{ height:100%; background:#7080b0; transition:width .5s var(--ease-out); }
+  /* 8pt: padding 16→32 vertical, 16→80 horizontal */
+  .question-area{ flex:1; display:flex; align-items:center; justify-content:center; padding:clamp(16px,3vw,32px) clamp(16px,5vw,80px); overflow-y:auto; }
+  .question-frame{ width:100%; max-width:660px; }
+  .question{ animation:slideIn .5s var(--ease-out); }
+  @keyframes slideIn{ from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+
+  /* 8pt: gap 8, margin-bottom 16 */
+  .q-meta{ display:flex; align-items:center; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+  .q-section-badge{ display:inline-flex; align-items:center; gap:8px; background:rgba(255,255,255,.95); color:var(--primary); padding:4px 12px 4px 8px; border-radius:999px; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; box-shadow:0 4px 12px rgba(0,0,0,.12); }
+  .q-number{ font-size:12px; color:rgba(248,251,250,.7); font-weight:500; display:inline-flex; align-items:center; gap:4px; }
+  /* 8pt: margin-bottom 8 */
+  .q-title{ font-size:clamp(20px,2.4vw,30px); font-weight:600; color:var(--paper); line-height:1.28; margin-bottom:8px; letter-spacing:-.015em; text-shadow:0 2px 16px rgba(0,0,0,.25); }
+  /* 8pt: margin-bottom 24 */
+  .q-help{ font-size:13px; color:rgba(248,251,250,.78); margin-bottom:24px; line-height:1.55; }
+
+  .q-input-wrap{ position:relative; }
+  /* BUG FIX: font-size ≥16px prevents iOS auto-zoom on input focus */
+  .q-input{ width:100%; background:transparent; border:none; border-bottom:2px solid rgba(248,251,250,.35); padding:12px 0; font-size:max(16px,clamp(16px,1.8vw,22px)); color:var(--paper); outline:none; font-family:inherit; -webkit-appearance:none; }
+  .q-input::placeholder{ color:rgba(248,251,250,.45); font-weight:300; }
+  .q-input-line{ position:absolute; bottom:0; left:0; height:2px; width:0; background:var(--paper); transition:width .35s var(--ease-out); pointer-events:none; }
+  .q-input:focus+.q-input-line{ width:100%; }
+
+  /* BUG FIX: font-size 16px, min-height 128px (16×8) */
+  .q-textarea{ width:100%; background:rgba(255,255,255,.1); border:1.5px solid rgba(248,251,250,.25); padding:16px; font-size:16px; line-height:1.6; color:var(--paper); outline:none; border-radius:8px; resize:vertical; min-height:128px; transition:border-color .25s,background .25s; font-family:inherit; -webkit-appearance:none; }
+  .q-textarea:focus{ border-color:var(--paper); background:rgba(255,255,255,.15); }
+  .q-textarea::placeholder{ color:rgba(248,251,250,.45); }
+
+  /* 8pt: gap 8 */
+  .choices{ display:flex; flex-direction:column; gap:8px; margin-top:4px; }
+  /* BUG FIX: removed translateX on mobile to prevent overflow; touch target padded to 44px min */
+  .choice{ display:flex; align-items:center; gap:12px; background:rgba(255,255,255,.12); border:1.5px solid rgba(248,251,250,.25); padding:12px 16px; border-radius:8px; text-align:left; font-size:14px; color:var(--paper); transition:all .2s var(--ease-out); font-family:inherit; width:100%; min-height:44px; }
+  @media(min-width:641px){
+    .choice:hover{ border-color:var(--paper); transform:translateX(4px); background:rgba(255,255,255,.18); }
+    .choice.selected{ transform:translateX(4px); }
+  }
+  @media(max-width:640px){
+    .choice:hover{ border-color:var(--paper); background:rgba(255,255,255,.18); }
+  }
+  .choice.selected{ background:var(--paper); border-color:var(--paper); border-width:2px; color:var(--primary); }
+  /* 8pt: 24×24 */
+  .choice-key{ width:24px; height:24px; border:1.5px solid rgba(248,251,250,.4); border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; background:rgba(255,255,255,.08); flex-shrink:0; transition:all .25s var(--ease-spring); }
+  .choice.selected .choice-key{ background:var(--primary); color:var(--paper); border-color:var(--primary); }
+  .choice-label{ flex:1; line-height:1.4; }
+  /* 8pt: 20×20 (kept, closest to 24) */
+  .choice-check{ width:20px; height:20px; border-radius:50%; background:var(--primary); color:var(--paper); display:flex; align-items:center; justify-content:center; font-size:10px; opacity:0; transition:opacity .3s var(--ease-spring); flex-shrink:0; }
+  .choice.selected .choice-check{ opacity:1; }
+  /* 8pt: margin-top 8 */
+  .other-expand{ margin-top:8px; }
+
+  /* 8pt: margin-top 24, gap 16 */
+  .q-actions{ margin-top:24px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  /* 8pt: padding 12px 24px */
+  .ok-btn{ background:var(--paper); color:var(--primary); border:none; padding:12px 24px; font-size:14px; font-weight:600; border-radius:8px; display:inline-flex; align-items:center; gap:8px; transition:all .2s var(--ease-out); box-shadow:0 8px 16px rgba(0,0,0,.2); font-family:inherit; min-height:44px; }
+  .ok-btn:hover:not(:disabled){ transform:translateY(-1px); box-shadow:0 12px 24px rgba(0,0,0,.3); }
+  .ok-btn:disabled{ background:rgba(255,255,255,.22); color:rgba(248,251,250,.45); box-shadow:none; cursor:not-allowed; }
+  .enter-ic{ font-size:10px; opacity:.7; border:1px solid rgba(42,42,42,.3); border-radius:3px; padding:2px 4px; }
+  .q-hint{ font-size:12px; color:rgba(248,251,250,.65); display:inline-flex; align-items:center; gap:8px; }
+  .q-hint kbd{ background:rgba(255,255,255,.15); border:1px solid rgba(248,251,250,.3); border-radius:4px; padding:2px 6px; font-size:10px; font-family:inherit; }
+  @media(max-width:640px){ .q-hint{ display:none; } }
+
+  /* 8pt: padding 12px vertical, clamp 16→32 horizontal */
+  .nav-footer{ padding:12px clamp(16px,4vw,32px); border-top:1px solid rgba(248,251,250,.1); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; gap:8px; }
+  .nav-arrows{ display:flex; gap:8px; }
+  /* 8pt: 40×40 (min 44px touch) */
+  .nav-arrow{ width:40px; height:40px; border:1.5px solid rgba(248,251,250,.3); border-radius:8px; background:rgba(255,255,255,.08); color:var(--paper); display:flex; align-items:center; justify-content:center; transition:all .2s; }
+  .nav-arrow:hover:not(:disabled){ background:rgba(255,255,255,.18); border-color:rgba(248,251,250,.6); }
+  .nav-arrow:disabled{ opacity:.3; cursor:not-allowed; }
+  .nav-arrow svg{ width:14px; height:14px; }
+  .nav-right{ font-size:12px; color:rgba(248,251,250,.6); display:flex; align-items:center; gap:8px; }
+  .nav-right .num{ color:var(--paper); font-weight:600; }
+  .divider{ width:1px; height:12px; background:rgba(248,251,250,.2); }
+  /* 8pt: padding 6px 12px → 8px 12px */
+  .guide-btn{ background:rgba(255,255,255,.1); border:1.5px solid rgba(248,251,250,.25); border-radius:6px; color:rgba(248,251,250,.85); padding:8px 12px; font-size:11px; font-weight:500; display:inline-flex; align-items:center; gap:6px; transition:all .2s; min-height:40px; }
+  .guide-btn:hover{ background:rgba(255,255,255,.18); border-color:rgba(248,251,250,.5); }
+  .guide-btn.active{ background:rgba(255,255,255,.2); border-color:var(--paper); color:var(--paper); }
+  /* Hide guide label on small mobile, keep icon */
+  @media(max-width:360px){ .guide-btn span{ display:none; } }
+
+  /* ====== SIDEBAR ====== */
+  /* 8pt: padding 16px 24px 16px */
+  .sidebar-logo{ padding:16px 24px; border-bottom:1px solid rgba(231,231,231,.7); display:flex; flex-direction:column; gap:8px; }
+  .sidebar-head{ display:flex; align-items:center; justify-content:space-between; }
+  .sidebar-head-title{ font-size:15px; font-weight:600; }
+  /* 8pt: 32×32 (plus visual centering) */
+  .sidebar-close{ background:transparent; border:none; color:var(--neutral-900); opacity:.5; width:32px; height:32px; border-radius:50%; font-size:20px; display:flex; align-items:center; justify-content:center; transition:background .2s; }
+  .sidebar-close:hover{ background:var(--neutral-200); opacity:1; }
+  .back-intro-btn{ display:inline-flex; align-items:center; gap:6px; background:transparent; border:1px solid rgba(42,42,42,.18); color:var(--primary); padding:6px 10px; border-radius:999px; font-size:11px; font-weight:500; transition:all .2s; min-height:32px; }
+  .back-intro-btn:hover{ background:var(--primary); color:var(--paper); border-color:var(--primary); transform:translateX(-2px); }
+  /* 8pt: padding 16px 0 24px */
+  .sidebar-nav{ flex:1; overflow-y:auto; padding:16px 0 24px; scrollbar-width:thin; }
+  /* 8pt: margin-bottom 16 */
+  .sidebar-section{ margin-bottom:16px; }
+  /* 8pt: padding 0 24px 8px */
+  .sidebar-section-title{ font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.1em; color:#a3a3a3; padding:0 24px 8px; display:flex; align-items:center; gap:8px; }
+  /* 8pt: padding 8px 24px */
+  .sidebar-q{ display:flex; align-items:center; gap:8px; padding:8px 24px; font-size:11.5px; color:#888; cursor:pointer; border-left:2px solid transparent; line-height:1.4; transition:color .2s,background .2s; min-height:40px; }
+  .sidebar-q:hover{ background:#fbfbfb; color:var(--neutral-900); }
+  .sidebar-q.active{ color:var(--primary); font-weight:500; border-left-color:var(--primary); background:linear-gradient(90deg,rgba(42,42,42,.05),transparent); }
+  .sidebar-q.answered{ color:var(--neutral-900); }
+  .sidebar-dot{ width:8px; height:8px; border-radius:50%; border:1.5px solid #d4d4d4; flex-shrink:0; background:transparent; transition:all .35s var(--ease-spring); }
+  .sidebar-q.answered .sidebar-dot{ background:var(--primary); border-color:var(--primary); box-shadow:0 0 0 2px rgba(42,42,42,.1); }
+  .sidebar-q.active .sidebar-dot{ border-color:var(--primary); border-width:2px; }
+  .sidebar-q-text{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .sidebar-q-num{ font-size:10px; color:#ccc; font-weight:500; }
+  /* 8pt: padding 12px 24px 16px */
+  .sidebar-foot{ padding:12px 24px 16px; border-top:1px solid rgba(231,231,231,.7); display:flex; align-items:center; justify-content:space-between; font-size:11px; color:#999; }
+  .sidebar-foot .count{ color:var(--primary); font-weight:600; }
+
+  /* ====== COMPLETE ====== */
+  /* 8pt: padding 24px */
+  .complete{ height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; background:linear-gradient(135deg,#2a2a2a 0%,#1f1f1f 100%); padding:24px; position:relative; overflow-y:auto; }
+  /* 8pt: bottom 32px */
+  .complete-logo{ position:absolute; bottom:32px; left:50%; transform:translateX(-50%); opacity:0.65; }
+  .complete-inner{ text-align:center; max-width:456px; width:100%; animation:introIn .6s var(--ease-out); }
+  /* 8pt: 56×56, margin-bottom 24 */
+  .complete-check{ width:56px; height:56px; border-radius:50%; background:rgba(255,255,255,.12); border:2px solid rgba(248,251,250,.4); display:flex; align-items:center; justify-content:center; margin:0 auto 24px; }
+  .complete-check svg{ width:24px; height:24px; stroke:var(--paper); stroke-width:2.5; fill:none; }
+  .complete-title{ font-size:clamp(22px,3vw,32px); font-weight:600; color:var(--paper); letter-spacing:-.02em; margin-bottom:16px; }
+  /* 8pt: margin-bottom 32 */
+  .complete-sub{ font-size:14px; color:rgba(248,251,250,.72); line-height:1.65; margin-bottom:32px; }
+  /* 8pt: gap 8 */
+  .complete-actions{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  /* 8pt: padding 12px 24px */
+  .complete-btn{ padding:12px 24px; border-radius:8px; font-size:14px; font-weight:600; display:inline-flex; align-items:center; gap:8px; transition:all .2s; font-family:inherit; min-height:48px; }
+  .complete-btn.primary{ background:var(--paper); color:var(--primary); border:none; box-shadow:0 8px 16px rgba(0,0,0,.2); }
+  .complete-btn.primary:hover{ transform:translateY(-2px); }
+  .complete-btn.secondary{ background:transparent; color:rgba(248,251,250,.7); border:1.5px solid rgba(248,251,250,.25); }
+  .complete-btn.secondary:hover{ border-color:rgba(248,251,250,.5); color:var(--paper); }
+
+  /* ====== RESPONSES ====== */
+  /* 8pt: padding clamp 16→32 */
+  .responses{ height:100%; overflow-y:auto; padding:clamp(16px,3vw,32px); }
+  /* 8pt: margin-bottom 24, gap 16 */
+  .responses-header{ display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:24px; gap:16px; flex-wrap:wrap; }
+  .responses-title{ font-size:20px; font-weight:600; margin-bottom:4px; }
+  .responses-sub{ font-size:13px; color:#888; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .resp-progress-mini{ width:64px; height:4px; background:var(--neutral-200); border-radius:2px; overflow:hidden; }
+  .resp-progress-mini-fill{ height:100%; background:var(--primary); border-radius:2px; }
+  /* 8pt: padding 8px 16px */
+  .export-btn{ background:var(--primary); color:var(--paper); border:none; padding:8px 16px; border-radius:8px; font-size:12px; font-weight:500; display:inline-flex; align-items:center; gap:8px; transition:all .2s; flex-shrink:0; font-family:inherit; min-height:40px; }
+  .export-btn:hover{ opacity:.85; transform:translateY(-1px); }
+  /* 8pt: margin-bottom 16 */
+  .response-section{ margin-bottom:16px; }
+  /* 8pt: padding-bottom 8 */
+  .response-section-title{ font-size:10.5px; font-weight:600; text-transform:uppercase; letter-spacing:.1em; color:#a3a3a3; padding-bottom:8px; border-bottom:1px solid var(--neutral-200); margin-bottom:0; display:flex; align-items:center; gap:8px; }
+  .response-section-title .num{ color:#ccc; }
+  .response-section-title .progress-mini{ margin-left:auto; font-size:11px; color:#ccc; font-weight:400; }
+  /* 8pt: padding 12px 0 */
+  .response-item{ padding:12px 0; border-bottom:1px solid rgba(231,231,231,.6); }
+  /* 8pt: margin-bottom 4, gap 8 */
+  .response-q{ font-size:11.5px; font-weight:500; color:#888; margin-bottom:4px; display:flex; align-items:center; gap:8px; }
+  .response-q .qn{ color:#ccc; font-size:10px; }
+  .response-a{ font-size:13px; color:var(--neutral-900); line-height:1.55; }
+  .response-a.empty{ color:#bbb; font-style:italic; }
+  .resp-tag{ display:inline-block; background:rgba(42,42,42,.08); color:var(--primary); padding:4px 8px; border-radius:999px; font-size:11px; margin:2px 2px 2px 0; }
+  .resp-tags{ display:flex; flex-wrap:wrap; gap:4px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+
+const SECTIONS = [
+  { id:'objetivo', icon:'🎯', title:'Website goal', questions:[
+    { id:'q1', type:'choice', title:'What is the main goal of the website?', help:'Select the option that best represents the focus. You can elaborate later.', options:['Sell products/services','Capture leads','Brand positioning','Share content / portfolio','Other'] },
+    { id:'q2', type:'short', title:'What action do you want the user to take?', help:'E.g. book a call, buy a product, get in touch, download something.', placeholder:'Type the main action...' },
+    { id:'q3', type:'multi', title:'What are the success metrics?', help:'Select all that apply.', options:['Leads generated','Sales / conversion','Time on site','Brand recognition','Organic traffic','Engagement (clicks, scroll)','Other'] }
+  ]},
+  { id:'posicionamento', icon:'🧭', title:'Positioning & brand', questions:[
+    { id:'q4', type:'long', title:'How do you want to be perceived?', help:'Think about adjectives and the image you want to convey.', placeholder:'E.g. trustworthy, sophisticated, approachable, innovative...' },
+    { id:'q5', type:'long', title:'If your brand were a person, what would they be like?', help:'Personality, tone of voice, style. You can even mention a real reference.', placeholder:'Describe the brand personality...' },
+    { id:'q6', type:'multi', title:'What feelings should the website convey?', options:['Trust','Sophistication','Warmth','Energy / dynamism','Calm / serenity','Professionalism','Creativity','Other'] },
+    { id:'q7', type:'long', title:'What do you NOT want the website to feel like?', help:'Knowing what to avoid helps a lot.', placeholder:'E.g. generic, dated, aggressive...' }
+  ]},
+  { id:'estrutura', icon:'🧱', title:'Site structure', questions:[
+    { id:'q8', type:'multi', title:'Which pages do you need?', options:['Home','About','Services','Portfolio / Cases','Blog','Contact','FAQ','Shop / Products','Other'] },
+    { id:'q9', type:'long', title:'What absolutely must be on the home page?', help:'Think about the elements that cannot be missing.', placeholder:'List the essential elements...' },
+    { id:'q30', type:'choice', title:'Quantas seções você imagina na home page?', help:'Isso evita que o site fique longo demais ou curto demais.', options:['Poucas (3 a 5)','Médio (6 a 8)','Muitas (9 ou mais)','Sem preferência'] },
+    { id:'q31', type:'choice', title:'Os textos do site você já tem ou precisa de sugestão?', help:'Saber isso muda muito o processo de criação.', options:['Tenho tudo pronto','Tenho parcialmente','Preciso de sugestão para tudo','Ainda não sei'] },
+    { id:'q10', type:'long', title:'Is there a specific journey the user should follow?', placeholder:'E.g. arrive via home → see services → book...' },
+    { id:'q11', type:'long', title:'Which content do you already have and which needs to be created?', placeholder:'Copy, images, videos, testimonials...' }
+  ]},
+  { id:'visual', icon:'🎨', title:'Visual direction', questions:[
+    { id:'q12', type:'choice', title:'Do you already have a defined visual identity?', options:['Yes, complete (logo, palette, typography)','Yes, partial','Only the logo','Not yet','Other'] },
+    { id:'q13', type:'long', title:'Any reference websites you like? Why?', help:'Paste links and tell me what catches your attention in each one.', placeholder:'Paste links and describe what you like...' },
+    { id:'q14', type:'long', title:'Is there anything you hate on websites?', placeholder:'Patterns, elements or behaviors that bother you...' },
+    { id:'q15', type:'choice', title:'Do you prefer something more minimalist or more expressive?', options:['Very minimalist','Balanced, with expressive touches','Very expressive / authorial','Other'] },
+    { id:'q32', type:'short', title:'Descreva o estilo visual que você quer em 3 palavras', help:'Ex: moderno, aconchegante, sofisticado. Isso me ajuda a não interpretar por você.', placeholder:'3 palavras...' }
+  ]},
+  { id:'funcionalidades', icon:'⚙️', title:'Features', questions:[
+    { id:'q16', type:'multi', title:'Which features does the website need?', options:['Blog','E-commerce','Online booking','Social media integration','Members area','Newsletter','Chat / WhatsApp','Other'] },
+    { id:'q17', type:'choice', title:'Does the website need to be multilingual?', options:['Yes, two languages','Yes, three or more','English only','Not sure yet','Other'] }
+  ]},
+  { id:'experiencia', icon:'📱', title:'User experience', questions:[
+    { id:'q18', type:'long', title:'What is the main path the user should follow?', placeholder:'Describe the ideal route...' },
+    { id:'q19', type:'long', title:'Where might they get stuck or give up?', help:'Known friction points or suspicions.', placeholder:'E.g. long form, missing information...' },
+    { id:'q20', type:'long', title:'What needs to be extremely simple?', placeholder:'The most important action for conversion...' }
+  ]},
+  { id:'tecnica', icon:'🚀', title:'Tech & operations', questions:[
+    { id:'q33', type:'choice', title:'Qual plataforma será usada para o site?', help:'Isso define como o site será construído e entregue.', options:['Framer','Webflow','WordPress','Outra','Ainda não decidi'] },
+    { id:'q21', type:'choice', title:'Do you already have a domain and hosting?', options:['Yes, both','Only the domain','Only the hosting','Nothing yet','Other'] },
+    { id:'q22', type:'short', title:'Who will maintain the website afterwards?', placeholder:'You, your team, an outside agency...' },
+    { id:'q23', type:'short', title:'Do you have a deadline?', placeholder:'Date or approximate window' },
+    { id:'q24', type:'long', title:'Are there any technical or budget constraints?', placeholder:'Important restrictions to consider...' }
+  ]},
+  { id:'estrategia', icon:'💡', title:'Going deeper', questions:[
+    { id:'q25', type:'long', title:'What does your client need to feel to make a decision?', placeholder:'Trust, urgency, identification...' },
+    { id:'q26', type:'long', title:'What might raise doubt or resistance?', placeholder:'Common objections in the buying process...' },
+    { id:'q27', type:'long', title:'What would make someone leave the site without acting?', placeholder:'Lack of clarity, slowness, price...' },
+    { id:'q28', type:'long', title:'What is the central promise the website needs to deliver?', placeholder:'The key phrase of your positioning...' },
+    { id:'q29', type:'long', title:'If the site had to convince in 5 seconds, what would it say?', help:'Your sharpest headline.', placeholder:'In one sentence...' }
+  ]}
+];
+
+const ALL_Q = SECTIONS.flatMap(s => s.questions.map(q => ({...q, sectionId:s.id, sectionTitle:s.title, sectionIcon:s.icon})));
+
+let phase = 'intro', tab = 'form', qIdx = 0, answers = {}, sidebarOpen = false;
+
+function isAnswered(q, v) {
+  if (!v && v !== 0) return false;
+  if (q.type==='short'||q.type==='long') return (v||'').trim().length > 0;
+  if (q.type==='choice') { if(!v.selected) return false; if(v.selected==='Other'&&!(v.other||'').trim()) return false; return true; }
+  if (q.type==='multi') { const s=v.selected||[]; if(!s.length) return false; if(s.includes('Other')&&!(v.other||'').trim()) return false; return true; }
+  return false;
+}
+function answeredCount() { return ALL_Q.filter(q => isAnswered(q, answers[q.id])).length; }
+function isMobile() { return window.innerWidth < 641; }
+function render() {
+  document.getElementById('app').innerHTML = buildApp();
+  const qc = document.getElementById('qCount');
+  if(qc) qc.textContent = `${ALL_Q.length} questions · ~30 min`;
+  bindEvents();
+}
+
+function buildApp() {
+  return `
+    <div class="mob-backdrop${sidebarOpen && isMobile() ? ' show' : ''}" id="mobBackdrop"></div>
+    <div class="shell">
+      <div class="main">
+        ${buildTabs()}
+        <div class="main-content">
+          ${tab==='responses' ? buildResponses() : phase==='intro' ? buildIntro() : phase==='complete' ? buildComplete() : buildForm()}
+        </div>
+      </div>
+      ${buildSidebar()}
+    </div>
+  `;
+}
+
+function buildTabs() {
+  const ac = answeredCount();
+  return `<div class="tabs">
+    <button class="tab ${tab==='form'?'active':''}" id="tabForm">Form</button>
+    <button class="tab ${tab==='responses'?'active':''}" id="tabResponses">Answers <span class="badge">${ac}</span></button>
+    <div class="tabs-spacer"></div>
+    <div class="tabs-meta"><span class="live-dot-green"></span><span>auto-saving</span></div>
+  </div>`;
+}
+
+function buildIntro() {
+  return `<div class="intro">
+    <header class="home-nav">
+      <div class="home-nav-logo">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="18 162 565 285" height="26" fill="#e7e7e7" aria-label="livia">
+          <path d="M 76.890625 -132.984375 C 76.890625 -118.617188 76.269531 -104.253906 75.03125 -89.890625 C 73.800781 -75.535156 73.1875 -61.050781 73.1875 -46.4375 C 73.1875 -39.5 73.800781 -32.625 75.03125 -25.8125 C 76.269531 -19.007812 76.890625 -12.265625 76.890625 -5.578125 C 76.890625 -1.117188 75.523438 3.398438 72.796875 7.984375 C 70.078125 12.566406 66.738281 16.46875 62.78125 19.6875 C 58.820312 22.90625 54.859375 24.515625 50.890625 24.515625 C 47.179688 24.515625 43.21875 22.90625 39 19.6875 C 34.789062 16.46875 31.078125 12.441406 27.859375 7.609375 C 24.640625 2.785156 22.660156 -2.222656 21.921875 -7.421875 C 19.691406 -27.484375 18.578125 -47.546875 18.578125 -67.609375 C 18.578125 -92.867188 19.316406 -118.867188 20.796875 -145.609375 C 22.285156 -172.359375 23.894531 -198.488281 25.625 -224 C 26.375 -236.882812 28.539062 -245.925781 32.125 -251.125 C 35.71875 -256.320312 41.726562 -258.921875 50.15625 -258.921875 C 59.3125 -258.921875 66.738281 -255.703125 72.4375 -249.265625 C 78.132812 -242.828125 80.984375 -234.40625 80.984375 -224 C 80.984375 -210.382812 80.238281 -197.015625 78.75 -183.890625 C 77.269531 -170.765625 76.53125 -157.632812 76.53125 -144.5 C 76.53125 -142.769531 76.53125 -140.914062 76.53125 -138.9375 C 76.53125 -136.957031 76.648438 -134.972656 76.890625 -132.984375 Z" transform="translate(20.637106, 428.258879)"/>
+          <path d="M 44.578125 -74.671875 C 50.765625 -74.171875 56.273438 -71.628906 61.109375 -67.046875 C 65.941406 -62.472656 69.78125 -56.960938 72.625 -50.515625 C 75.46875 -44.078125 76.890625 -37.640625 76.890625 -31.203125 C 76.890625 -25.015625 74.351562 -18.820312 69.28125 -12.625 C 64.207031 -6.4375 58.078125 -3.34375 50.890625 -3.34375 C 45.191406 -3.34375 39.863281 -5.632812 34.90625 -10.21875 C 29.957031 -14.800781 26 -20.742188 23.03125 -28.046875 C 20.0625 -35.347656 18.578125 -42.835938 18.578125 -50.515625 C 18.578125 -60.179688 21.113281 -66.625 26.1875 -69.84375 C 31.269531 -73.0625 37.398438 -74.671875 44.578125 -74.671875 Z M 73.1875 -176.453125 C 72.195312 -168.773438 69.347656 -162.148438 64.640625 -156.578125 C 59.929688 -151.003906 54.484375 -148.21875 48.296875 -148.21875 C 40.367188 -148.21875 33.492188 -150.941406 27.671875 -156.390625 C 21.859375 -161.835938 18.953125 -167.90625 18.953125 -174.59375 C 18.953125 -181.78125 21.550781 -188.160156 26.75 -193.734375 C 31.945312 -199.304688 38.257812 -202.09375 45.6875 -202.09375 C 50.394531 -202.09375 54.789062 -200.726562 58.875 -198 C 62.96875 -195.28125 66.375 -191.9375 69.09375 -187.96875 C 71.820312 -184.007812 73.1875 -180.171875 73.1875 -176.453125 Z" transform="translate(94.933338, 428.258879)"/>
+          <path d="M 149.34375 -52.75 C 149.582031 -51.757812 149.703125 -50.832031 149.703125 -49.96875 C 149.703125 -49.101562 149.703125 -48.171875 149.703125 -47.171875 C 149.703125 -39.742188 146.976562 -33.304688 141.53125 -27.859375 C 136.082031 -22.410156 129.703125 -17.519531 122.390625 -13.1875 C 115.085938 -8.851562 108.835938 -4.457031 103.640625 0 C 101.910156 1.726562 99.867188 2.78125 97.515625 3.15625 C 95.160156 3.53125 92.992188 3.84375 91.015625 4.09375 C 87.546875 4.09375 84.140625 3.410156 80.796875 2.046875 C 77.453125 0.679688 74.171875 -0.988281 70.953125 -2.96875 C 55.847656 -12.875 43.460938 -24.820312 33.796875 -38.8125 C 24.140625 -52.8125 16.09375 -68.109375 9.65625 -84.703125 C 8.164062 -88.171875 7.421875 -91.390625 7.421875 -94.359375 C 7.421875 -99.066406 9.523438 -102.90625 13.734375 -105.875 C 17.953125 -108.84375 22.164062 -110.328125 26.375 -110.328125 C 33.550781 -110.328125 39.738281 -107.910156 44.9375 -103.078125 C 50.144531 -98.253906 54.664062 -92.679688 58.5 -86.359375 C 62.34375 -80.046875 65.9375 -74.472656 69.28125 -69.640625 C 72.625 -64.816406 76.15625 -62.40625 79.875 -62.40625 C 84.570312 -62.40625 88.960938 -64.632812 93.046875 -69.09375 C 97.140625 -73.550781 101.226562 -78.691406 105.3125 -84.515625 C 109.394531 -90.335938 113.539062 -95.472656 117.75 -99.921875 C 121.96875 -104.378906 126.550781 -106.609375 131.5 -106.609375 C 136.207031 -105.617188 139.800781 -102.585938 142.28125 -97.515625 C 144.757812 -92.441406 146.554688 -87.300781 147.671875 -82.09375 C 148.785156 -76.894531 149.34375 -73.550781 149.34375 -72.0625 C 149.34375 -69.59375 149.21875 -67.242188 148.96875 -65.015625 C 148.71875 -62.785156 148.59375 -60.675781 148.59375 -58.6875 C 148.59375 -57.695312 148.65625 -56.707031 148.78125 -55.71875 C 148.90625 -54.726562 149.09375 -53.738281 149.34375 -52.75 Z" transform="translate(165.143204, 428.258879)"/>
+          <path d="M 44.578125 -74.671875 C 50.765625 -74.171875 56.273438 -71.628906 61.109375 -67.046875 C 65.941406 -62.472656 69.78125 -56.960938 72.625 -50.515625 C 75.46875 -44.078125 76.890625 -37.640625 76.890625 -31.203125 C 76.890625 -25.015625 74.351562 -18.820312 69.28125 -12.625 C 64.207031 -6.4375 58.078125 -3.34375 50.890625 -3.34375 C 45.191406 -3.34375 39.863281 -5.632812 34.90625 -10.21875 C 29.957031 -14.800781 26 -20.742188 23.03125 -28.046875 C 20.0625 -35.347656 18.578125 -42.835938 18.578125 -50.515625 C 18.578125 -60.179688 21.113281 -66.625 26.1875 -69.84375 C 31.269531 -73.0625 37.398438 -74.671875 44.578125 -74.671875 Z M 73.1875 -176.453125 C 72.195312 -168.773438 69.347656 -162.148438 64.640625 -156.578125 C 59.929688 -151.003906 54.484375 -148.21875 48.296875 -148.21875 C 40.367188 -148.21875 33.492188 -150.941406 27.671875 -156.390625 C 21.859375 -161.835938 18.953125 -167.90625 18.953125 -174.59375 C 18.953125 -181.78125 21.550781 -188.160156 26.75 -193.734375 C 31.945312 -199.304688 38.257812 -202.09375 45.6875 -202.09375 C 50.394531 -202.09375 54.789062 -200.726562 58.875 -198 C 62.96875 -195.28125 66.375 -191.9375 69.09375 -187.96875 C 71.820312 -184.007812 73.1875 -180.171875 73.1875 -176.453125 Z" transform="translate(311.878403, 428.258879)"/>
+          <path d="M 46.8125 13.75 C 35.664062 13 26.929688 9.648438 20.609375 3.703125 C 14.296875 -2.234375 11.140625 -9.535156 11.140625 -18.203125 C 11.140625 -23.398438 12.253906 -28.722656 14.484375 -34.171875 C 20.921875 -49.285156 29.585938 -62.351562 40.484375 -73.375 C 51.390625 -84.394531 65.257812 -91.757812 82.09375 -95.46875 C 87.050781 -96.707031 91.816406 -98.007812 96.390625 -99.375 C 100.972656 -100.738281 105.375 -103.398438 109.59375 -107.359375 C 117.269531 -114.535156 124.945312 -118.125 132.625 -118.125 C 138.3125 -118.125 143.570312 -115.957031 148.40625 -111.625 C 153.238281 -107.289062 156.519531 -100.789062 158.25 -92.125 C 159.488281 -85.9375 161.160156 -80.175781 163.265625 -74.84375 C 165.367188 -69.519531 169.269531 -65.003906 174.96875 -61.296875 C 177.9375 -59.316406 180.535156 -57.023438 182.765625 -54.421875 C 184.992188 -51.816406 186.109375 -48.785156 186.109375 -45.328125 C 186.109375 -39.128906 184.1875 -34.296875 180.34375 -30.828125 C 176.507812 -27.359375 171.929688 -24.941406 166.609375 -23.578125 C 161.285156 -22.222656 156.394531 -21.546875 151.9375 -21.546875 C 147.226562 -21.546875 142.644531 -22.101562 138.1875 -23.21875 C 133.726562 -24.332031 129.394531 -26.5 125.1875 -29.71875 C 120.726562 -33.1875 116.519531 -34.921875 112.5625 -34.921875 C 106.613281 -34.921875 101.410156 -30.957031 96.953125 -23.03125 C 93.734375 -17.332031 89.398438 -11.570312 83.953125 -5.75 C 78.503906 0.0625 72.929688 4.882812 67.234375 8.71875 C 61.535156 12.5625 56.335938 14.484375 51.640625 14.484375 C 50.398438 14.484375 48.789062 14.238281 46.8125 13.75 Z" transform="translate(382.088269, 428.258879)"/>
+        </svg>
+      </div>
+
+      <div class="home-nav-right">
+        <button class="eye-btn-dark${sidebarOpen?' active':''}" id="toggleSidebar" title="Questions guide">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 12s4-7.5 10.5-7.5S22.5 12 22.5 12s-4 7.5-10.5 7.5S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3.2"/></svg>
+        </button>
+        <button class="home-nav-cta" id="startBriefing">Start briefing
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
+      </div>
+    </header>
+    <section class="home-hero">
+      <div class="hero-card">
+        <div class="eyebrow">Briefing · Website</div>
+        <div class="headline-block">
+          <h1 class="headline">a website that<br><em>actually works</em></h1>
+          <p class="sub">A guided questionnaire that captures everything<span class="br-desk"></span>I need about your brand, audience and goals.<span class="br-desk"></span><strong class="sub-strong">To design a website tailored to your business.</strong></p>
+        </div>
+        <div class="cta-row"><button class="intro-cta" id="startBriefing2"><span>Start briefing</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button><span class="cta-meta" id="qCount"></span></div>
+      </div>
+    </section>
+    <footer class="home-foot">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span>Your answers are private and will only be used by Livia Design.</span>
+      </div>
+      <div class="foot-right" style="display:flex;align-items:center;gap:8px">
+        <span>Questions?</span><a href="mailto:hello@livia.studio" class="foot-msg-btn">send a message</a>
+      </div>
+    </footer>
+  </div>`;
+}
+
+function buildForm() {
+  const q = ALL_Q[qIdx];
+  const total = ALL_Q.length;
+  const prog = Math.round((qIdx+1)/total*100);
+  const pct = Math.round(answeredCount()/total*100);
+  const ans = isAnswered(q, answers[q.id]);
+  const sIdx = SECTIONS.findIndex(s=>s.id===q.sectionId)+1;
+  return `<div class="form-stage">
+    <div class="question-area">
+      <div class="question-frame">
+        <div class="question">
+          <div class="q-meta">
+            <div class="q-section-badge"><span>${q.sectionIcon}</span><span>Section ${String(sIdx).padStart(2,'0')} · ${q.sectionTitle}</span></div>
+            <div class="q-number"><span style="opacity:.5">↳</span><span>${String(qIdx+1).padStart(2,'0')} <span style="opacity:.5">/ ${String(total).padStart(2,'0')}</span></span></div>
+          </div>
+          <h2 class="q-title">${q.title}<span style="color:rgba(248,251,250,.7);font-size:16px;margin-left:4px;vertical-align:super">*</span></h2>
+          ${q.help?`<p class="q-help">${q.help}</p>`:''}
+          <div>${buildInput(q)}</div>
+          <div class="q-actions">
+            <button class="ok-btn" id="okBtn" ${ans?'':'disabled'}>OK <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
+            
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" style="width:${prog}%"></div></div>
+    <div class="nav-footer">
+      <div class="nav-arrows">
+        <button class="nav-arrow" id="prevBtn" ${qIdx===0?'disabled':''}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+        </button>
+        <button class="nav-arrow" id="nextBtn" ${ans?'':'disabled'}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
+      <div class="nav-right">
+        <span>Q ${qIdx+1}/${total}</span>
+        <div class="divider"></div>
+        <span><span class="num">${pct}%</span> done</span>
+        <div class="divider"></div>
+        <button class="guide-btn${sidebarOpen?' active':''}" id="toggleSidebarForm">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 12s4-7.5 10.5-7.5S22.5 12 22.5 12s-4 7.5-10.5 7.5S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3.2"/></svg>
+          Guide
+        </button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function buildInput(q) {
+  const v = answers[q.id];
+  if (q.type==='short') return `<div class="q-input-wrap"><input class="q-input" id="qInput" type="text" value="${escHtml(v||'')}" placeholder="${escHtml(q.placeholder||'Type your answer...')}" autocomplete="off"><span class="q-input-line"></span></div>`;
+  if (q.type==='long') return `<textarea class="q-textarea" id="qInput" placeholder="${escHtml(q.placeholder||'Type your answer...')}">${escHtml(v||'')}</textarea>`;
+  if (q.type==='choice'||q.type==='multi') {
+    const multi = q.type==='multi';
+    const sel = multi ? (v?.selected||[]) : (v?.selected||null);
+    const ot = v?.other||'';
+    let h = `<div class="choices">`;
+    q.options.forEach((opt,i) => {
+      const isSel = multi ? sel.includes(opt) : sel===opt;
+      h += `<button class="choice${isSel?' selected':''}" data-opt="${escHtml(opt)}"><span class="choice-key">${String.fromCharCode(65+i)}</span><span class="choice-label">${escHtml(opt)}</span><span class="choice-check">✓</span></button>`;
+    });
+    h += `</div>`;
+    const showOther = multi ? sel.includes('Other') : sel==='Other';
+    if (showOther) h += `<div class="other-expand"><textarea class="q-textarea" id="otherInput" placeholder="Describe..." style="min-height:88px">${escHtml(ot)}</textarea></div>`;
+    return h;
+  }
+  return '';
+}
+
+function buildComplete() {
+  return `<div class="complete"><div class="complete-inner">
+    <div class="complete-check"><svg viewBox="0 0 24 24"><polyline points="4,12 10,18 20,6"/></svg></div>
+    <h1 class="complete-title">Thank you for answering!</h1>
+    <p class="complete-sub">Your answers have been recorded. I'll use all of this to guide the strategic and visual decisions for your project. I'll be in touch soon for the next step.</p>
+    <div class="complete-actions">
+      <button class="complete-btn primary" id="seeAnswers">See my answers <span>→</span></button>
+      <button class="complete-btn secondary" id="restartBtn">Fill out again</button>
+    </div>
+  </div>
+  <div class="complete-logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="18 162 565 285" height="56" fill="#ffffff" aria-label="livia"><path d="M 76.890625 -132.984375 C 76.890625 -118.617188 76.269531 -104.253906 75.03125 -89.890625 C 73.800781 -75.535156 73.1875 -61.050781 73.1875 -46.4375 C 73.1875 -39.5 73.800781 -32.625 75.03125 -25.8125 C 76.269531 -19.007812 76.890625 -12.265625 76.890625 -5.578125 C 76.890625 -1.117188 75.523438 3.398438 72.796875 7.984375 C 70.078125 12.566406 66.738281 16.46875 62.78125 19.6875 C 58.820312 22.90625 54.859375 24.515625 50.890625 24.515625 C 47.179688 24.515625 43.21875 22.90625 39 19.6875 C 34.789062 16.46875 31.078125 12.441406 27.859375 7.609375 C 24.640625 2.785156 22.660156 -2.222656 21.921875 -7.421875 C 19.691406 -27.484375 18.578125 -47.546875 18.578125 -67.609375 C 18.578125 -92.867188 19.316406 -118.867188 20.796875 -145.609375 C 22.285156 -172.359375 23.894531 -198.488281 25.625 -224 C 26.375 -236.882812 28.539062 -245.925781 32.125 -251.125 C 35.71875 -256.320312 41.726562 -258.921875 50.15625 -258.921875 C 59.3125 -258.921875 66.738281 -255.703125 72.4375 -249.265625 C 78.132812 -242.828125 80.984375 -234.40625 80.984375 -224 C 80.984375 -210.382812 80.238281 -197.015625 78.75 -183.890625 C 77.269531 -170.765625 76.53125 -157.632812 76.53125 -144.5 C 76.53125 -142.769531 76.53125 -140.914062 76.53125 -138.9375 C 76.53125 -136.957031 76.648438 -134.972656 76.890625 -132.984375 Z" transform="translate(20.637106, 428.258879)"/><path d="M 44.578125 -74.671875 C 50.765625 -74.171875 56.273438 -71.628906 61.109375 -67.046875 C 65.941406 -62.472656 69.78125 -56.960938 72.625 -50.515625 C 75.46875 -44.078125 76.890625 -37.640625 76.890625 -31.203125 C 76.890625 -25.015625 74.351562 -18.820312 69.28125 -12.625 C 64.207031 -6.4375 58.078125 -3.34375 50.890625 -3.34375 C 45.191406 -3.34375 39.863281 -5.632812 34.90625 -10.21875 C 29.957031 -14.800781 26 -20.742188 23.03125 -28.046875 C 20.0625 -35.347656 18.578125 -42.835938 18.578125 -50.515625 C 18.578125 -60.179688 21.113281 -66.625 26.1875 -69.84375 C 31.269531 -73.0625 37.398438 -74.671875 44.578125 -74.671875 Z M 73.1875 -176.453125 C 72.195312 -168.773438 69.347656 -162.148438 64.640625 -156.578125 C 59.929688 -151.003906 54.484375 -148.21875 48.296875 -148.21875 C 40.367188 -148.21875 33.492188 -150.941406 27.671875 -156.390625 C 21.859375 -161.835938 18.953125 -167.90625 18.953125 -174.59375 C 18.953125 -181.78125 21.550781 -188.160156 26.75 -193.734375 C 31.945312 -199.304688 38.257812 -202.09375 45.6875 -202.09375 C 50.394531 -202.09375 54.789062 -200.726562 58.875 -198 C 62.96875 -195.28125 66.375 -191.9375 69.09375 -187.96875 C 71.820312 -184.007812 73.1875 -180.171875 73.1875 -176.453125 Z" transform="translate(94.933338, 428.258879)"/><path d="M 149.34375 -52.75 C 149.582031 -51.757812 149.703125 -50.832031 149.703125 -49.96875 C 149.703125 -49.101562 149.703125 -48.171875 149.703125 -47.171875 C 149.703125 -39.742188 146.976562 -33.304688 141.53125 -27.859375 C 136.082031 -22.410156 129.703125 -17.519531 122.390625 -13.1875 C 115.085938 -8.851562 108.835938 -4.457031 103.640625 0 C 101.910156 1.726562 99.867188 2.78125 97.515625 3.15625 C 95.160156 3.53125 92.992188 3.84375 91.015625 4.09375 C 87.546875 4.09375 84.140625 3.410156 80.796875 2.046875 C 77.453125 0.679688 74.171875 -0.988281 70.953125 -2.96875 C 55.847656 -12.875 43.460938 -24.820312 33.796875 -38.8125 C 24.140625 -52.8125 16.09375 -68.109375 9.65625 -84.703125 C 8.164062 -88.171875 7.421875 -91.390625 7.421875 -94.359375 C 7.421875 -99.066406 9.523438 -102.90625 13.734375 -105.875 C 17.953125 -108.84375 22.164062 -110.328125 26.375 -110.328125 C 33.550781 -110.328125 39.738281 -107.910156 44.9375 -103.078125 C 50.144531 -98.253906 54.664062 -92.679688 58.5 -86.359375 C 62.34375 -80.046875 65.9375 -74.472656 69.28125 -69.640625 C 72.625 -64.816406 76.15625 -62.40625 79.875 -62.40625 C 84.570312 -62.40625 88.960938 -64.632812 93.046875 -69.09375 C 97.140625 -73.550781 101.226562 -78.691406 105.3125 -84.515625 C 109.394531 -90.335938 113.539062 -95.472656 117.75 -99.921875 C 121.96875 -104.378906 126.550781 -106.609375 131.5 -106.609375 C 136.207031 -105.617188 139.800781 -102.585938 142.28125 -97.515625 C 144.757812 -92.441406 146.554688 -87.300781 147.671875 -82.09375 C 148.785156 -76.894531 149.34375 -73.550781 149.34375 -72.0625 C 149.34375 -69.59375 149.21875 -67.242188 148.96875 -65.015625 C 148.71875 -62.785156 148.59375 -60.675781 148.59375 -58.6875 C 148.59375 -57.695312 148.65625 -56.707031 148.78125 -55.71875 C 148.90625 -54.726562 149.09375 -53.738281 149.34375 -52.75 Z" transform="translate(165.143204, 428.258879)"/><path d="M 44.578125 -74.671875 C 50.765625 -74.171875 56.273438 -71.628906 61.109375 -67.046875 C 65.941406 -62.472656 69.78125 -56.960938 72.625 -50.515625 C 75.46875 -44.078125 76.890625 -37.640625 76.890625 -31.203125 C 76.890625 -25.015625 74.351562 -18.820312 69.28125 -12.625 C 64.207031 -6.4375 58.078125 -3.34375 50.890625 -3.34375 C 45.191406 -3.34375 39.863281 -5.632812 34.90625 -10.21875 C 29.957031 -14.800781 26 -20.742188 23.03125 -28.046875 C 20.0625 -35.347656 18.578125 -42.835938 18.578125 -50.515625 C 18.578125 -60.179688 21.113281 -66.625 26.1875 -69.84375 C 31.269531 -73.0625 37.398438 -74.671875 44.578125 -74.671875 Z M 73.1875 -176.453125 C 72.195312 -168.773438 69.347656 -162.148438 64.640625 -156.578125 C 59.929688 -151.003906 54.484375 -148.21875 48.296875 -148.21875 C 40.367188 -148.21875 33.492188 -150.941406 27.671875 -156.390625 C 21.859375 -161.835938 18.953125 -167.90625 18.953125 -174.59375 C 18.953125 -181.78125 21.550781 -188.160156 26.75 -193.734375 C 31.945312 -199.304688 38.257812 -202.09375 45.6875 -202.09375 C 50.394531 -202.09375 54.789062 -200.726562 58.875 -198 C 62.96875 -195.28125 66.375 -191.9375 69.09375 -187.96875 C 71.820312 -184.007812 73.1875 -180.171875 73.1875 -176.453125 Z" transform="translate(311.878403, 428.258879)"/><path d="M 46.8125 13.75 C 35.664062 13 26.929688 9.648438 20.609375 3.703125 C 14.296875 -2.234375 11.140625 -9.535156 11.140625 -18.203125 C 11.140625 -23.398438 12.253906 -28.722656 14.484375 -34.171875 C 20.921875 -49.285156 29.585938 -62.351562 40.484375 -73.375 C 51.390625 -84.394531 65.257812 -91.757812 82.09375 -95.46875 C 87.050781 -96.707031 91.816406 -98.007812 96.390625 -99.375 C 100.972656 -100.738281 105.375 -103.398438 109.59375 -107.359375 C 117.269531 -114.535156 124.945312 -118.125 132.625 -118.125 C 138.3125 -118.125 143.570312 -115.957031 148.40625 -111.625 C 153.238281 -107.289062 156.519531 -100.789062 158.25 -92.125 C 159.488281 -85.9375 161.160156 -80.175781 163.265625 -74.84375 C 165.367188 -69.519531 169.269531 -65.003906 174.96875 -61.296875 C 177.9375 -59.316406 180.535156 -57.023438 182.765625 -54.421875 C 184.992188 -51.816406 186.109375 -48.785156 186.109375 -45.328125 C 186.109375 -39.128906 184.1875 -34.296875 180.34375 -30.828125 C 176.507812 -27.359375 171.929688 -24.941406 166.609375 -23.578125 C 161.285156 -22.222656 156.394531 -21.546875 151.9375 -21.546875 C 147.226562 -21.546875 142.644531 -22.101562 138.1875 -23.21875 C 133.726562 -24.332031 129.394531 -26.5 125.1875 -29.71875 C 120.726562 -33.1875 116.519531 -34.921875 112.5625 -34.921875 C 106.613281 -34.921875 101.410156 -30.957031 96.953125 -23.03125 C 93.734375 -17.332031 89.398438 -11.570312 83.953125 -5.75 C 78.503906 0.0625 72.929688 4.882812 67.234375 8.71875 C 61.535156 12.5625 56.335938 14.484375 51.640625 14.484375 C 50.398438 14.484375 48.789062 14.238281 46.8125 13.75 Z" transform="translate(382.088269, 428.258879)"/></svg></div>
+</div>`;
+}
+
+function buildResponses() {
+  const total = ALL_Q.length, ac = answeredCount(), pct = Math.round(ac/total*100);
+  let h = `<div class="responses"><div class="responses-header"><div>
+    <h1 class="responses-title">Your answers</h1>
+    <div class="responses-sub"><span><strong style="color:var(--primary)">${ac}</strong> of ${total} answered · ${pct}%</span>
+    <div class="resp-progress-mini"><div class="resp-progress-mini-fill" style="width:${pct}%"></div></div></div>
+  </div>
+  <button class="export-btn" id="exportBtn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12m0 0l-5-5m5 5l5-5M4 20h16"/></svg>Export</button>
+  </div>`;
+  SECTIONS.forEach((s,si) => {
+    const sa = s.questions.filter(q=>isAnswered(q,answers[q.id])).length;
+    h += `<div class="response-section"><div class="response-section-title"><span>${s.icon}</span><span>${s.title}</span><span class="num">${String(si+1).padStart(2,'0')}</span><span class="progress-mini">${sa}/${s.questions.length}</span></div>`;
+    s.questions.forEach(q => {
+      const v = answers[q.id], gi = ALL_Q.findIndex(qq=>qq.id===q.id)+1;
+      let aHtml = !v||!isAnswered(q,v) ? `<div class="response-a empty">no answer</div>` :
+        q.type==='multi'&&v.selected?.length>0 ? `<div class="response-a"><div class="resp-tags">${v.selected.map(o=>`<span class="resp-tag">${escHtml(o==='Other'?`Other: ${v.other}`:o)}</span>`).join('')}</div></div>` :
+        `<div class="response-a">${escHtml(q.type==='choice'?v.selected==='Other'?`Other: ${v.other||''}`:v.selected:v||'')}</div>`;
+      h += `<div class="response-item"><div class="response-q"><span class="qn">${String(gi).padStart(2,'0')}</span><span>${escHtml(q.title)}</span></div>${aHtml}</div>`;
+    });
+    h += `</div>`;
+  });
+  return h + `</div>`;
+}
+
+function buildSidebar() {
+  const ac = answeredCount(), total = ALL_Q.length, curQ = ALL_Q[qIdx];
+  let h = `<aside class="sidebar${sidebarOpen?' open':''}" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-head"><span class="sidebar-head-title">Briefing</span><button class="sidebar-close" id="closeSidebar">×</button></div>
+      ${phase!=='intro'?`<button class="back-intro-btn" id="backIntro"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>Back to intro</button>`:''}
+    </div><nav class="sidebar-nav">`;
+  SECTIONS.forEach((s,si) => {
+    h += `<div class="sidebar-section"><div class="sidebar-section-title"><span>${s.icon}</span><span><span class="num">${String(si+1).padStart(2,'0')}</span> · ${s.title}</span></div>`;
+    s.questions.forEach(q => {
+      const answered = isAnswered(q,answers[q.id]), active = phase==='form'&&q.id===curQ?.id;
+      const gi = ALL_Q.findIndex(qq=>qq.id===q.id)+1;
+      h += `<div class="sidebar-q${answered?' answered':''}${active?' active':''}" data-qid="${q.id}"><span class="sidebar-dot"></span><span class="sidebar-q-text">${escHtml(q.title)}</span><span class="sidebar-q-num">${String(gi).padStart(2,'0')}</span></div>`;
+    });
+    h += `</div>`;
+  });
+  h += `</nav><div class="sidebar-foot"><span>Progress</span><span><span class="count">${ac}</span> / ${total}</span></div></aside>`;
+  return h;
+}
+
+function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function toggleSidebar() { sidebarOpen = !sidebarOpen; render(); }
+function goNext() { const q=ALL_Q[qIdx]; if(!isAnswered(q,answers[q.id])) return; if(qIdx<ALL_Q.length-1) qIdx++; else phase='complete'; render(); }
+function goPrev() { if(qIdx>0){qIdx--;render();} }
+function jumpTo(qid) { const i=ALL_Q.findIndex(q=>q.id===qid); if(i>=0){qIdx=i;phase='form';tab='form';if(isMobile())sidebarOpen=false;render();} }
+function startBriefing(qid) { if(qid){const i=ALL_Q.findIndex(q=>q.id===qid);if(i>=0)qIdx=i;} phase='form';tab='form';render(); }
+function exportText() {
+  let t='BRIEFING — livia\n═══════════════════════════════════\n'+`Exported: ${new Date().toLocaleString('en-US')}\n\n`;
+  SECTIONS.forEach((s,si)=>{
+    t+=`\n${s.icon}  ${String(si+1).padStart(2,'0')}. ${s.title.toUpperCase()}\n───────────────────────────────────\n`;
+    s.questions.forEach((q,qi)=>{
+      t+=`\n${qi+1}. ${q.title}\n`;
+      const v=answers[q.id]; let a='[no answer]';
+      if(v&&isAnswered(q,v)){if(q.type==='short'||q.type==='long')a=v;else if(q.type==='choice')a=v.selected==='Other'?`Other: ${v.other||''}`:v.selected;else if(q.type==='multi')a=(v.selected||[]).map(o=>o==='Other'?`Other (${v.other||''})`:o).join(', ');}
+      t+=`   → ${a}\n`;
+    });
+  });
+  const b=new Blob([t],{type:'text/plain;charset=utf-8'}),u=URL.createObjectURL(b),a=document.createElement('a');
+  a.href=u;a.download=`briefing-livia-${new Date().toISOString().slice(0,10)}.txt`;a.click();URL.revokeObjectURL(u);
+}
+
+function updateAnswer(qid, val) {
+  answers[qid]=val;
+  const q=ALL_Q.find(q=>q.id===qid), ans=isAnswered(q,val);
+  const ok=document.getElementById('okBtn'), nx=document.getElementById('nextBtn');
+  if(ok)ok.disabled=!ans; if(nx)nx.disabled=!ans;
+  document.querySelectorAll(`[data-qid="${qid}"]`).forEach(el=>{if(ans)el.classList.add('answered');else el.classList.remove('answered');});
+  const b=document.querySelector('.badge'); if(b)b.textContent=answeredCount();
+}
+
+function bindEvents() {
+  const mbk=document.getElementById('mobBackdrop'); if(mbk)mbk.addEventListener('click',()=>{sidebarOpen=false;render();});
+  ['toggleSidebar','toggleSidebarForm'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('click',toggleSidebar);});
+  const cl=document.getElementById('closeSidebar'); if(cl)cl.addEventListener('click',()=>{sidebarOpen=false;render();});
+  const bk=document.getElementById('backIntro'); if(bk)bk.addEventListener('click',()=>{phase='intro';tab='form';sidebarOpen=false;render();});
+  document.querySelectorAll('.sidebar-q[data-qid]').forEach(el=>el.addEventListener('click',()=>jumpTo(el.dataset.qid)));
+  const tf=document.getElementById('tabForm'),tr=document.getElementById('tabResponses');
+  if(tf)tf.addEventListener('click',()=>{tab='form';render();}); if(tr)tr.addEventListener('click',()=>{tab='responses';render();});
+  ['startBriefing','startBriefing2'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('click',()=>startBriefing());});
+  document.querySelectorAll('[data-jump]').forEach(el=>el.addEventListener('click',()=>{const s=SECTIONS.find(s=>s.id===el.dataset.jump);if(s)startBriefing(s.questions[0].id);}));
+  const ok=document.getElementById('okBtn'),pv=document.getElementById('prevBtn'),nx=document.getElementById('nextBtn');
+  if(ok)ok.addEventListener('click',goNext); if(pv)pv.addEventListener('click',goPrev); if(nx)nx.addEventListener('click',goNext);
+  const sa=document.getElementById('seeAnswers'),rs=document.getElementById('restartBtn');
+  if(sa)sa.addEventListener('click',()=>{tab='responses';render();}); if(rs)rs.addEventListener('click',()=>{answers={};qIdx=0;phase='intro';tab='form';render();});
+  const ex=document.getElementById('exportBtn'); if(ex)ex.addEventListener('click',exportText);
+
+  const q=ALL_Q[qIdx];
+  if(q&&phase==='form'){
+    const inp=document.getElementById('qInput');
+    if(inp){
+      inp.addEventListener('input',()=>updateAnswer(q.id,inp.value));
+      inp.addEventListener('keydown',e=>{if(q.type==='short'&&e.key==='Enter'){e.preventDefault();goNext();}if(q.type==='long'&&e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();goNext();}});
+      setTimeout(()=>inp.focus(),50);
+    }
+    const oi=document.getElementById('otherInput');
+    if(oi)oi.addEventListener('input',()=>{answers[q.id]={...(answers[q.id]||{}),other:oi.value};updateAnswer(q.id,answers[q.id]);});
+    document.querySelectorAll('.choice[data-opt]').forEach(btn=>btn.addEventListener('click',()=>{
+      const opt=btn.dataset.opt,multi=q.type==='multi',cur=answers[q.id]||{};
+      if(multi){const sel=Array.isArray(cur.selected)?[...cur.selected]:[];const i=sel.indexOf(opt);if(i>=0)sel.splice(i,1);else sel.push(opt);answers[q.id]={selected:sel,other:sel.includes('Other')?cur.other:''};}
+      else{answers[q.id]={selected:opt,other:opt==='Other'?cur.other:''};}
+      updateAnswer(q.id,answers[q.id]);render();
+      if(!multi&&opt!=='Other')setTimeout(()=>{if(isAnswered(q,answers[q.id]))goNext();},280);
+    }));
+    // Enter para avançar em choice/multi quando já respondido
+    if(q.type==='choice'||q.type==='multi'){
+      document.addEventListener('keydown',function onChoiceKey(e){
+        if(e.key==='Enter'){
+          e.preventDefault();
+          if(isAnswered(q,answers[q.id]))goNext();
+        }
+      },{once:true});
+    }
+  }
+  if(phase==='intro')document.addEventListener('keydown',function onK(e){if(e.key==='Enter'){e.preventDefault();startBriefing();}},{once:true});
+}
+
+render();
+</script>
+</body>
+</html>
